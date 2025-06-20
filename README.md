@@ -1,4 +1,4 @@
-# simple proxy via cloudflare tunnel
+# simple http/ssh/tcp proxy via cloudflare/pinggy tunnel
 
 You can run a gost proxy server on remote server like gcp or aws.
 
