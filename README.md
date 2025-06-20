@@ -52,13 +52,16 @@ source $HOME/.bashrc
 gh_install
 ```
 
-### install gost
+### install gost and websocat
 
 ```bash
 gh_install go-gost/gost linux_amd64.tar.gz /tmp/gost_linux.tar.gz
 mkdir -p /tmp/gost && tar xf /tmp/gost_linux.tar.gz -C /tmp/gost
 sudo mv /tmp/gost/gost /bin/
 
+gh_install vi/websocat websocat.x86_64-unknown-linux-musl /tmp/websocat
+chmod +x /tmp/websocat
+sudo mv /tmp/websocat /bin/
 
 ```
 
@@ -86,6 +89,14 @@ pip install flask
 nohup bash -c "flask run --host 0.0.0.0 --port 8000 " > /tmp/flask.nohup.out 2>&1 &
 
 ```
+### run websocat ssh server and tunnel
+
+```bash
+nohup bash -c "websocat --binary ws-l:127.0.0.1:38022 tcp:127.0.0.1:22" > /tmp/websocat-ssh.out 2>&1 &
+nohup bash -c "while true; do cloudflared tunnel --url localhost:38022   > /tmp/cloudflared-ssh.out 2>&1 ;flock -x  /tmp/cloudflared-ssh.out  truncate -s 0 /tmp/cloudflared-ssh.out;  done " > /tmp/cloudflared-ssh.nohup.out 2>&1 &
+
+```
+
 ### run proxy and tunnel
 
 #### cloudflare
@@ -107,7 +118,9 @@ nohup bash -c "while true; do ssh -p 443 -R0:localhost:38082 -o StrictHostKeyChe
 
 ## on client
 
-### cloudflare
+### run proxy client
+
+#### cloudflare
 
 ```bash
 
@@ -124,7 +137,7 @@ echo url: $url
 gost -L=:38083 -F=mwss://$url:443
 ```
 
-### pinggy
+#### pinggy
 
 ```bash
 
@@ -139,4 +152,13 @@ url=${url/"tcp://"/""}
 echo url: $url
 
 gost -L=:38082 -F=ss+ohttp://chacha20:123456@$url
+```
+### run ssh client
+
+```bash
+server=<your server>
+url=$(curl -X POST http://$server:8000/run   -H "Authorization: Bearer mysecrettoken123"   -H "Content-Type: application/json"   -d '{"action": "extract_urls", "file_path": "/tmp/cloudflared-ssh.out"}' | jq -r ".urls[2]")
+url="${url/https:\/\//}"
+ssh runner@$url -o ProxyCommand="websocat -E  --binary wss://%h" -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no
+
 ```
