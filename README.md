@@ -1,0 +1,105 @@
+
+
+## on server 
+
+
+```bash
+
+cat << 'EOF' | tee -a $HOME/.bashrc
+
+# gh_install vi/websocat websocat.x86_64-unknown-linux-musl
+gh_install(){
+
+  echo "Number of arguments: $#"
+  echo "All arguments as separate words: $@"
+  echo "All arguments as a single string: $*"
+  if [[ -z "$1" ||  -z "$2" || -z "$3" ]]; then
+    echo "please set repo , arch and filename"
+  else
+    repo=$1
+    arch=$2
+    filename=$3
+
+    echo "set repo: $repo, arch: $arch, filename: $filename"
+
+    url=$(curl -L   -H "Accept: application/vnd.github+json"   https://api.github.com/repos/$repo/releases | jq -r ".[0].assets[] | .browser_download_url" | grep "$arch") 
+    count=0
+    while [  -z "$url" && $count -lt 5 ];do
+      url=$(curl -L   -H "Accept: application/vnd.github+json"   https://api.github.com/repos/$repo/releases | jq -r ".[0].assets[] | .browser_download_url" | grep "$arch") 
+      count=$((count+1))
+    done
+  echo "url: $url"
+
+  if [ ! -z "$url" ]; then
+      wget $url -O $filename
+  fi
+
+  fi 
+
+} 
+
+EOF
+
+source $HOME/.bashrc
+gh_install
+```
+
+### install gost
+
+```bash
+gh_install ginuerzh/gost linux_amd64.tar.gz /tmp/gost_linux.tar.gz
+mkdir -p /tmp/gost && tar xf /tmp/gost_linux.tar.gz -C /tmp/gost
+sudo mv /tmp/gost/gost /bin/
+
+
+```
+
+### install tunnel
+
+```bash
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+
+# Add this repo to your apt repositories
+echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
+
+# install cloudflared
+sudo apt-get update && sudo apt-get install -y cloudflared
+
+
+```
+
+### run flask server
+
+```bash
+pip install flask
+
+# flask run --host 0.0.0.0 --port 8000
+nohup bash -c "flask run --host 0.0.0.0 --port 8000 " > /tmp/flask.nohup.out 2>&1 &
+
+```
+### run proxy and tunnel
+
+```bash
+
+nohup bash -c "gost -L=mws://:38083?enableCompression=true?keepAlive=1 " > /tmp/gost.2.out 2>&1 &
+nohup bash -c "while true; do cloudflared tunnel --url localhost:38083   > /tmp/cloudflared.out 2>&1 ;flock -x  /tmp/cloudflared.out  truncate -s 0 /tmp/cloudflared.out;  done " > /tmp/cloudflared.nohup.out 2>&1 &
+
+```
+
+
+## on client
+
+```bash
+server=localhost
+
+url=$(curl -X POST http://$server:8000/run \
+  -H "Authorization: Bearer mysecrettoken123" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "extract_urls", "file_path": "/tmp/cloudflared.out"}'  | jq -r ".urls[2]")
+
+url=${url/"https://"/""}
+echo url: $url
+
+gost -L=:38083 -F=mwss://$url:443
+```
