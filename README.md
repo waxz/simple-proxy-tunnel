@@ -1,7 +1,15 @@
+# simple proxy via cloudflare tunnel
+
+You can run a gost proxy server on remote server like gcp or aws.
+
+Then forward your local traffic to remote server via cloudflare tunnel.
+
+If your server doesn't have extern ip, you can use tailscale.
+
+You can also use other tunnel like [pinggy](https://pinggy.io/), you need an account.
 
 
 ## on server 
-
 
 ```bash
 
@@ -80,18 +88,30 @@ nohup bash -c "flask run --host 0.0.0.0 --port 8000 " > /tmp/flask.nohup.out 2>&
 ```
 ### run proxy and tunnel
 
-```bash
+#### cloudflare
 
+```bash
 nohup bash -c "gost -L=mws://:38083?enableCompression=true?keepAlive=1 " > /tmp/gost.2.out 2>&1 &
 nohup bash -c "while true; do cloudflared tunnel --url localhost:38083   > /tmp/cloudflared.out 2>&1 ;flock -x  /tmp/cloudflared.out  truncate -s 0 /tmp/cloudflared.out;  done " > /tmp/cloudflared.nohup.out 2>&1 &
+```
 
+#### pinggy
+If you use free plan, pinggy will reset every hour. Just rerun your local script.
+
+```bash
+PINGGY_TOKEN=xxxxx
+nohup bash -c "gost -L=ss+ohttp://chacha20:123456@:38082 " > /tmp/gost.1.out 2>&1 &
+nohup bash -c "while true; do ssh -p 443 -R0:localhost:38082 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 xzL2nErJ1Pq+tcp@free.pinggy.io  > /tmp/pinggy.out ;flock -x  /tmp/pinggy.out  truncate -s 0 /tmp/pinggy.out;  done " > /tmp/pinggy.nohup.out 2>&1 &
 ```
 
 
 ## on client
 
+### cloudflare
+
 ```bash
-server=localhost
+
+server=<your server>
 
 url=$(curl -X POST http://$server:8000/run \
   -H "Authorization: Bearer mysecrettoken123" \
@@ -102,4 +122,21 @@ url=${url/"https://"/""}
 echo url: $url
 
 gost -L=:38083 -F=mwss://$url:443
+```
+
+### pinggy
+
+```bash
+
+server=<your server>
+
+url=$(curl -X POST http://$server:8000/run \
+  -H "Authorization: Bearer mysecrettoken123" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "extract_urls", "file_path": "/tmp/pinggy.out"}'  | jq -r ".urls[1]")
+
+url=${url/"tcp://"/""}
+echo url: $url
+
+gost -L=:38082 -F=ss+ohttp://chacha20:123456@$url
 ```
