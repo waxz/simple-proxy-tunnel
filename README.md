@@ -55,7 +55,7 @@ gh_install
 ### install gost
 
 ```bash
-gh_install ginuerzh/gost linux_amd64.tar.gz /tmp/gost_linux.tar.gz
+gh_install go-gost/gost linux_amd64.tar.gz /tmp/gost_linux.tar.gz
 mkdir -p /tmp/gost && tar xf /tmp/gost_linux.tar.gz -C /tmp/gost
 sudo mv /tmp/gost/gost /bin/
 
