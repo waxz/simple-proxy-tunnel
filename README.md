@@ -102,7 +102,7 @@ nohup bash -c "while true; do cloudflared tunnel --url localhost:38022   > /tmp/
 #### cloudflare
 
 ```bash
-nohup bash -c "gost -L=mws://:38083?enableCompression=true?keepAlive=1 " > /tmp/gost.2.out 2>&1 &
+nohup bash -c "gost -L=mws://:38083?enableCompression=true&keepAlive=true&idletimeout=30s&readBufferSize=64KB" > /tmp/gost.2.out 2>&1 &
 nohup bash -c "while true; do cloudflared tunnel --url localhost:38083   > /tmp/cloudflared.out 2>&1 ;flock -x  /tmp/cloudflared.out  truncate -s 0 /tmp/cloudflared.out;  done " > /tmp/cloudflared.nohup.out 2>&1 &
 ```
 
@@ -134,7 +134,7 @@ url=$(curl -X POST http://$server:8000/run \
 url=${url/"https://"/""}
 echo url: $url
 
-gost -L=:38083 -F=mwss://$url:443
+gost -L=:38083 -F=mwss://$url:443?enableCompression=true&keepAlive=true&idletimeout=30s&readBufferSize=64KB
 ```
 
 #### pinggy
