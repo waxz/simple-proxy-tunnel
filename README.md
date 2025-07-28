@@ -16,35 +16,39 @@ You can also use other tunnel like [pinggy](https://pinggy.io/), you need an acc
 cat << 'EOF' | tee -a $HOME/.bashrc
 
 # gh_install vi/websocat websocat.x86_64-unknown-linux-musl
-gh_install(){
-
+gh_install() {
   echo "Number of arguments: $#"
   echo "All arguments as separate words: $@"
   echo "All arguments as a single string: $*"
-  if [[ -z "$1" ||  -z "$2" || -z "$3" ]]; then
-    echo "please set repo , arch and filename"
-  else
-    repo=$1
-    arch=$2
-    filename=$3
 
-    echo "set repo: $repo, arch: $arch, filename: $filename"
-
-    url=$(curl -L   -H "Accept: application/vnd.github+json"   https://api.github.com/repos/$repo/releases | jq -r ".[0].assets[] | .browser_download_url" | grep "$arch") 
-    count=0
-    while [  -z "$url" && $count -lt 5 ];do
-      url=$(curl -L   -H "Accept: application/vnd.github+json"   https://api.github.com/repos/$repo/releases | jq -r ".[0].assets[] | .browser_download_url" | grep "$arch") 
-      count=$((count+1))
-    done
-  echo "url: $url"
-
-  if [ ! -z "$url" ]; then
-      wget $url -O $filename
+  if [[ $# -ne 3 ]]; then
+    echo "Please set repo, arch, and filename"
+    return 1
   fi
 
-  fi 
+  local repo="$1"
+  local arch="$2"
+  local filename="$3"
 
-} 
+  echo "Set repo: $repo, arch: $arch, filename: $filename"
+
+  local url
+  local count=0
+
+  while [[ -z "$url" && $count -lt 5 ]]; do
+    content=$(curl -s -L -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$repo/releases")
+    url=$(echo "$content" | jq -r --arg arch "$arch" '.[0] | .assets[] | .browser_download_url | select(endswith($arch))')
+    count=$((count + 1))
+  done
+
+  if [[ -z "$url" ]]; then
+    echo "Failed to find a valid download URL after $count attempts."
+    return 1
+  fi
+
+  echo "Download URL: $url"
+  wget -q "$url" -O "$filename" && echo "Downloaded $filename successfully." || echo "Failed to download $filename."
+}
 
 EOF
 
@@ -92,6 +96,9 @@ nohup bash -c "flask run --host 0.0.0.0 --port 8000 " > /tmp/flask.nohup.out 2>&
 ### run websocat ssh server and tunnel
 
 ```bash
+ps -A -o tid,cmd  | grep -v grep | grep "websocat --binary ws-l:127.0.0.1:38022 tcp:127.0.0.1:22" | awk '{print $1}' | xargs -I {} /bin/bash -c ' kill -9  {} '
+ps -A -o tid,cmd  | grep -v grep | grep "cloudflared tunnel --url localhost:38022" | awk '{print $1}' | xargs -I {} /bin/bash -c ' kill -9  {} '
+
 nohup bash -c "websocat --binary ws-l:127.0.0.1:38022 tcp:127.0.0.1:22" > /tmp/websocat-ssh.out 2>&1 &
 nohup bash -c "while true; do cloudflared tunnel --url localhost:38022   > /tmp/cloudflared-ssh.out 2>&1 ;flock -x  /tmp/cloudflared-ssh.out  truncate -s 0 /tmp/cloudflared-ssh.out;  done " > /tmp/cloudflared-ssh.nohup.out 2>&1 &
 
@@ -102,6 +109,9 @@ nohup bash -c "while true; do cloudflared tunnel --url localhost:38022   > /tmp/
 #### cloudflare
 
 ```bash
+ps -A -o tid,cmd  | grep -v grep | grep "gost -L=mws://:38083" | awk '{print $1}' | xargs -I {} /bin/bash -c ' kill -9  {} '
+ps -A -o tid,cmd  | grep -v grep | grep "cloudflared tunnel --url localhost:38083" | awk '{print $1}' | xargs -I {} /bin/bash -c ' kill -9  {} '
+
 nohup bash -c "gost -L=mws://:38083?enableCompression=true&keepAlive=true&idletimeout=30s&readBufferSize=64KB" > /tmp/gost.2.out 2>&1 &
 nohup bash -c "while true; do cloudflared tunnel --url localhost:38083   > /tmp/cloudflared.out 2>&1 ;flock -x  /tmp/cloudflared.out  truncate -s 0 /tmp/cloudflared.out;  done " > /tmp/cloudflared.nohup.out 2>&1 &
 ```
